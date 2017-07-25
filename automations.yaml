@@ -1,0 +1,29 @@
+  - id: sander_leaves_home
+    alias: 'Sander leaves home and everything shuts down'
+    trigger:
+      platform: zone
+      event: leave
+      zone: zone.home
+      entity_id: device_tracker.ec1f7206a254
+    condition:
+      - condition: time
+        after: '7:00:00'
+        before: '23:59:00'
+    action:
+      service: switch.turn_off
+      entity_id: switch.wol_titan
+
+  - id: sander_gets_home
+    alias: 'Sander gets home and everything powers on'
+    trigger:
+      platform: zone
+      event: enter
+      zone: zone.home
+      entity_id: device_tracker.ec1f7206a254
+    condition:
+      - condition: time
+        after: '7:00:00'                                                                                 
+        before: '23:59:00'                                                                               
+    action:
+      service: switch.turn_on
+      entity_id: switch.wol_titan

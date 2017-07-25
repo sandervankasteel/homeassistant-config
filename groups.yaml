@@ -1,0 +1,19 @@
+#group:
+#  default_view:
+#    view: yes
+#    icon: mdi:home 
+#    entities:
+#      - group.mainroom
+#     - group.all_devices
+#  mainroom:
+#    view: yes
+#    name: 'Main room'
+#    entities:
+#      - media_player.chromecast_sander
+#      - switch.wol_titan
+#  kitchen:
+#    view: yes
+#    name: Kitchen
+#  bathroom:
+#    view: yes
+#    name: Bathroom
