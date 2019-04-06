@@ -12,19 +12,29 @@ homeassistant:
   time_zone: Europe/Amsterdam
 
 # Show links to resources in log and frontend
-introduction:
+# introduction:
 
 # Enables the frontend
 frontend:
 
+# Enabled system_health
+system_health:
+
 # Enables configuration UI
 config:
 
+recorder:
+    db_url: !secret mysql_connection
+
 http:
   # Uncomment this to add a password (recommended!)
-  api_password: !secret api_password
+  # api_password: !secret api_password
   # Uncomment this if you are using SSL or running in Docker etc
-  # base_url: example.duckdns.org:8123
+  #base_url: /hass/
+  #trusted_proxies:
+  #  - 127.0.0.1
+  ip_ban_enabled: True
+  login_attempts_threshold: 5
 
 # Checks for available updates
 # Note: This component will send some information about your system to
@@ -33,6 +43,8 @@ http:
 # https://home-assistant.io/blog/2016/10/25/explaining-the-updater/
 updater:
   include_used_components: true
+
+api:
 
 # Discover some devices automatically
 discovery:
@@ -46,20 +58,33 @@ history:
 # View all events in a logbook
 logbook:
 
-# Track the sun
+# Tracks the sun
 sun:
 
 # Weather Prediction
-#weather:
-#  - platform: yweather
 sensor:
   - platform: buienradar
+#    name: 'Groningen'
     monitored_conditions:
-      - symbol
-      - humidity
       - temperature
-      - windspeed
-      - pressure
+      - humidity
+  - platform: dht
+    sensor: AM2302
+    pin: 4
+    name: 'Binnen'
+    #temperature_offset: -1.8
+    monitored_conditions:
+      - temperature
+      - humidity
+#  - platform: transmission
+#    host: 127.0.0.1
+#    monitored_variables:
+#      - 'current_status'
+#      - 'download_speed'
+#      - 'upload_speed'
+#      - 'active_torrents'
+#      - 'paused_torrents'
+#      - 'total_torrents'
 
 # Text to speech
 tts:
@@ -67,30 +92,252 @@ tts:
 
 group: !include groups.yaml
 automation: !include automations.yaml
-
+scene:
+  - name: 'Netflix and chill'
+    entities:
+      light.woonkamer_plafond:
+        state: on
+        brightness: 13
+#      media_player.gpm_desktop_player:
+#        state: paused
+        
 device_tracker:
-  - platform: luci
+  - platform: ubus
     host: 10.13.37.1
     username: root
     password: !secret openwrt_root_password
     track_new_devices: no
 
-media_player:
+cast:
+  media_player:
   - platform: cast
-  - platform: gpmdp
-    host: 10.13.37.102
-  - platform: kodi
-    host: 10.13.37.200
-    username: kodi
-    password: !secret kodi_kodi_password
 
+media_player:
+#  - platform: gpmdp
+#    host: titan
+  - platform: kodi
+    host: 10.13.37.191
+    turn_on_action:
+      service: media_player.kodi_call_method
+      data:
+        entity_id: media_player.kodi
+        method: Addons.ExecuteAddon
+        addonid: script.json-cec
+        params:
+          command: activate
+    turn_off_action:
+    - service: media_player.media_stop
+      data:
+        entity_id: media_player.kodi
+    - service: media_player.kodi_call_method
+      data:
+        entity_id: media_player.kodi
+        method: Addons.ExecuteAddon
+        addonid: script.json-cec
+        params:
+          command: standby
+
+#switch:
+#  - platform: wake_on_lan
+#    mac_address: "90-2b-34-ad-35-db"
+#    host: 10.13.37.102
+#    name: "Desktop"
+#    turn_off:
+#      service: shell_command.turn_off_titan
+
+#  - platform: command_line
+#    switches:
+#      tv:
+#        command_on: ssh alarm@10.13.37.190 "echo 'on 0' | cec-client -s"
+#        command_off: ssh alarm@10.13.37.190 "echo 'standby 0' | cec-client -s"
+#        command_state: ssh alarm@10.13.37.190 "echo 'pow 0' | cec-client -s |grep 'power status:'"
+#        value_template: '{{ value == "power status: on" }}'
+#        friendly_name: TV
+
+shell_command:
+  turn_off_titan: 'ssh hass@titan sudo poweroff'
+
+
+#hue:
+#  bridges:
+#    - host: 10.13.37.199
+#      allow_unreachable: true
+#      allow_hue_groups: true
+
+
+#
+# KODI
+#
 switch:
+#  - platform: transmission
+#    host: 127.0.0.1
+  - platform: template
+    switches:
+      mode_kodi:
+        value_template: "{{ is_state('input_boolean.mode_kodi', 'on') }}"
+        turn_on:
+          - service: input_boolean.turn_on
+            entity_id: input_boolean.mode_kodi
+          - service: group.set_visibility
+            entity_id: group.remote_control_kodi
+            data:
+              visible: True
+        turn_off:
+          - service: input_boolean.turn_off
+            entity_id: input_boolean.mode_kodi
+          - service: group.set_visibility
+            entity_id: group.remote_control_kodi
+            data:
+              visible: False
   - platform: wake_on_lan
     mac_address: "90-2b-34-ad-35-db"
-    host: 10.13.37.102
+    host: titan
     name: "Desktop"
     turn_off:
       service: shell_command.turn_off_titan
 
-shell_command:
-  turn_off_titan: 'ssh hass@titan sudo poweroff'
+script:
+  # TV On
+  kodi_tv_on:
+    alias: Kodi turn on TV
+    sequence:
+      - condition: state
+        entity_id: switch.tv
+        state: 'off'
+      - service: switch.turn_on
+        entity_id: switch.tv
+      - delay: 00:00:05
+      - service: script.tv_h1
+
+  # TV Off
+  kodi_tv_off:
+    alias: Kodi turn off TV
+    sequence:
+      - service: script.kodi_home
+      - delay: 00:00:01
+      - service: switch.turn_off
+        entity_id: switch.tv      
+
+  # Play something (Party Mode)
+  kodi_play_something:
+    alias: Kodi Play Something
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Player.Open
+          item:
+            partymode: music
+      - service: script.kodi_tv_on
+  
+  # Play Playlist
+  kodi_play_playlist:
+    alias: Kodi Play Playlist
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Player.Open
+          item:
+            playlistid: "{{ value }}"
+
+  # Command
+  kodi_cmd:
+    alias: Kodi Command
+    sequence:
+      - service: media_player.kodi_call_method
+        data_template:
+          entity_id: media_player.kodi
+          method: "{{ value }}"
+
+  # TV Show
+  kodi_tvshows:
+    alias: Kodi TV Show
+    sequence:
+      - service: media_player.kodi_call_method
+        data_template:
+          entity_id: media_player.kodi
+          method: Addons.ExecuteAddon
+          addonid: script.tv.show.last.episode
+      - delay: 00:00:02
+      - service: script.kodi_tv_on
+  
+  # Addon
+  kodi_addon:
+    alias: Kodi Addon
+    sequence:
+      - service: media_player.kodi_call_method
+        data_template:
+          entity_id: media_player.kodi
+          method: Addons.ExecuteAddon
+          addonid: "{{ value }}"
+          params:
+            command: activate
+  
+  # Play/Puase
+  kodi_playpause:
+    alias: Kodi Play/Pause
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Player.PlayPause
+          playerid: 0
+  
+  # Stop
+  kodi_stop:
+    alias: Kodi Play/Pause
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Player.Stop
+          playerid: 0
+  
+  # Home
+  kodi_home:
+    alias: Kodi Home
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Player.Stop
+          playerid: 0
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: Input.Home
+      - service: script.kodi_tv_on
+  
+  # Test
+  kodi_test:
+    alias: Kodi Test
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: GUI.ActivateWindow
+          window: Videos,videodb://recentlyaddedepisodes/
+  
+  # Update Library
+  kodi_update_library:
+    alias: Update Kodi Library
+    sequence:
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: VideoLibrary.Scan
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: VideoLibrary.Clean
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: AudioLibrary.Scan
+      - service: media_player.kodi_call_method
+        data:
+          entity_id: media_player.kodi
+          method: AudioLibrary.Clean
+
+          
