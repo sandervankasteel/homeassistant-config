@@ -1,29 +1,103 @@
-  - id: sander_leaves_home
-    alias: 'Sander leaves home and everything shuts down'
-    trigger:
-      platform: zone
-      event: leave
-      zone: zone.home
-      entity_id: device_tracker.ec1f7206a254
-    condition:
-      - condition: time
-        after: '7:00:00'
-        before: '23:59:00'
-    action:
-      service: switch.turn_off
-      entity_id: switch.wol_titan
-
-  - id: sander_gets_home
-    alias: 'Sander gets home and everything powers on'
-    trigger:
-      platform: zone
-      event: enter
-      zone: zone.home
-      entity_id: device_tracker.ec1f7206a254
-    condition:
-      - condition: time
-        after: '7:00:00'                                                                                 
-        before: '23:59:00'                                                                               
-    action:
-      service: switch.turn_on
-      entity_id: switch.wol_titan
+- id: sander_leaves_home
+  alias: Sander leaves home and everything shuts down
+  trigger:
+    platform: zone
+    event: leave
+    zone: zone.home
+    entity_id: device_tracker.ec1f7206a254
+  condition:
+  - condition: time
+    after: '7:00:00'
+    before: '23:59:00'
+  action:
+    service: switch.turn_off
+    entity_id: switch.wol_titan
+- id: sander_gets_home
+  alias: Sander gets home and everything powers on
+  trigger:
+  - entity_id: device_tracker.ec1f7206a254
+    event: enter
+    platform: zone
+    zone: zone.home
+  condition:
+  - after: sunset
+    condition: sun
+  action:
+  - data:
+      brightness: 1
+      friendly_name: Woonkamer plafond
+      supported_features: 41
+    entity_id: switch.wol_titan
+    service: light.turn_on
+- id: '1502998005151'
+  alias: Light's go on when somebody is home
+  trigger:
+  - event: sunset
+    offset: 00:00:00
+    platform: sun
+  condition:
+  - condition: zone
+    entity_id: device_tracker.ec1f7206a254
+    zone: zone.home
+  action:
+  - data:
+      brightness: '25'
+      entity_id: light.woonkamer_plafond
+      transition: '300'
+    service: light.turn_on
+- id: '1542320775717'
+  alias: Fade lights when Kodi is playing
+  trigger:
+  - entity_id: media_player.kodi
+    from: idle
+    platform: state
+    to: playing
+  condition:
+  - after: sunset
+    condition: sun
+  action:
+  - data:
+      entity_id: light.woonkamer_plafond
+    service: light.turn_off
+  - data:
+      brightness: 36
+      entity_id: light.sfeer_woonkamer
+      rgb_color:
+      - 255
+      - 190
+      - 44
+      transition: '60'
+    service: light.turn_on
+  - alias: ''
+    data:
+      entity_id: switch.transmission_turtle_mode
+    service: switch.turn_on
+  - data:
+      entity_id: light.keuken_plafond
+    service: light.turn_off
+- id: '1545086590506'
+  alias: Turn the lights when Kodi isn't playing after 01:30
+  trigger:
+  - at: 02:30
+    platform: time
+  condition:
+  - condition: state
+    entity_id: media_player.kodi
+    state: idle
+  action:
+  - data:
+      entity_id: light.sfeer_woonkamer
+    service: light.turn_off
+  - data:
+      entity_id: switch.transmission_turtle_mode
+    service: switch.turn_off
+- id: '1546189794393'
+  alias: Update Kodi Library when Transmission Amount of torrents changed
+  trigger:
+  - entity_id: sensor.transmission_total_torrents
+    platform: state
+  condition:
+  - condition: template
+    value_template: '{{ trigger.to_state.state != trigger.from_state.state }}'
+  action:
+  - service: script.kodi_update_library
