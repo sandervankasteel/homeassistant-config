@@ -1,0 +1,5 @@
+- name: 'Watch movies'
+- entities:
+  light.hue_white_lamp_2:
+    state: on
+    brightness: 13
